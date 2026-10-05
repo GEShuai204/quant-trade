@@ -103,9 +103,10 @@ def run_live() -> int:
         log.warning("V1 strategy is designed for BTC/USD; current=%s", settings.trade_pair)
 
     log.info(
-        "V1 market-confirm bot starting trade=%s loop=%ss",
+        "V1 market-confirm bot starting trade=%s loop=%ss (~%.0f min)",
         settings.trade_pair,
         settings.loop_seconds,
+        settings.loop_seconds / 60,
     )
 
     client.sync_time()
@@ -121,9 +122,10 @@ def run_live() -> int:
 
     rules = pair_rules(exchange, settings.trade_pair)
     data_dir = Path("data")
-    btc_hist = PriceHistory(data_dir / "btc_1h.json", maxlen=300)
+    bar_tag = f"{settings.loop_seconds}s"
+    btc_hist = PriceHistory(data_dir / f"btc_{bar_tag}.json", maxlen=300)
     watch_hist = {
-        p: PriceHistory(data_dir / f"{p.replace('/', '_').lower()}_1h.json", maxlen=300)
+        p: PriceHistory(data_dir / f"{p.replace('/', '_').lower()}_{bar_tag}.json", maxlen=300)
         for p in watch
     }
 

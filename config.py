@@ -65,7 +65,7 @@ def load_settings() -> Settings:
         base_url=_clean(os.getenv("ROOSTOO_BASE_URL", "https://mock-api.roostoo.com")).rstrip("/"),
         trade_pair=_clean(os.getenv("TRADE_PAIR", "BTC/USD")).upper(),
         watch_pairs=watch,
-        loop_seconds=max(300, _int("LOOP_SECONDS", 3600)),
+        loop_seconds=max(300, _int("LOOP_SECONDS", 900)),
         sma_fast=sma_fast,
         sma_slow=sma_slow,
         http_timeout=max(5, _int("HTTP_TIMEOUT", 15)),
