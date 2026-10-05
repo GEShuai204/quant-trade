@@ -25,6 +25,11 @@ class PriceHistory:
     def _save(self) -> None:
         self.path.write_text(json.dumps(self.prices), encoding="utf-8")
 
+    def seed(self, prices: list[float]) -> None:
+        """Replace history (used for historical kline bootstrap)."""
+        self.prices = [float(x) for x in prices if float(x) > 0][-self.maxlen :]
+        self._save()
+
     def append(self, price: float) -> None:
         self.prices.append(float(price))
         self.prices = self.prices[-self.maxlen :]

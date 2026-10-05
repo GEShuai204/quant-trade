@@ -8,6 +8,7 @@ from pathlib import Path
 from config import load_settings
 from roostoo_client import RoostooClient, RoostooError
 from src.logger import setup_logger
+from src.kline_bootstrap import fetch_close_prices
 from src.market_data import PriceHistory, extract_ticker_row
 from src.order_manager import OrderManager
 from src.portfolio import equity_usd
@@ -34,8 +35,16 @@ def run_test() -> int:
         print(f"FAIL config: {exc}")
         return 1
 
+    key = settings.api_key
+    secret = settings.api_secret
+    print(f"base_url={settings.base_url}")
+    print(f"api_key_len={len(key)} api_key_head={key[:4]}...{key[-4:] if len(key) >= 8 else ''}")
+    print(f"api_secret_len={len(secret)}")
+    print("If Balance/Short fail with auth errors: Key/Secret wrong, swapped, or quoted in .env\n")
+
     try:
-        client.sync_time()
+        offset = client.sync_time()
+        print(f"clock_offset_ms={offset}\n")
     except RoostooError as exc:
         print(f"WARN clock sync: {exc}\n")
 
@@ -50,8 +59,11 @@ def run_test() -> int:
     for i, (name, fn) in enumerate(steps, start=1):
         print(f"[{i}] {name}")
         try:
-            fn()
-            print("OK\n")
+            data = fn()
+            print("OK")
+            if name in {"Balance", "Short Positions"}:
+                print(data)
+            print()
         except RoostooError as exc:
             failed = True
             print(f"FAIL: {exc}\n")
@@ -75,6 +87,22 @@ def run_live() -> int:
     exchange = client.get_exchange_info()
     rules = pair_rules(exchange, settings.trade_pair)
     history = PriceHistory(Path("data") / "prices.json", maxlen=max(200, settings.sma_slow * 4))
+    # Roostoo has no candles. Seed SMA from public klines so we need not wait for sma_slow loops.
+    if len(history.prices) < settings.sma_slow:
+        try:
+            closes = fetch_close_prices(
+                settings.trade_pair,
+                settings.loop_seconds,
+                limit=max(settings.sma_slow * 3, 45),
+                timeout=settings.http_timeout,
+            )
+            history.seed(closes)
+            log.info("price history seeded bars=%d (SMA ready)", len(history.prices))
+        except Exception as exc:
+            log.warning("kline bootstrap skipped: %s (will accumulate live ticks)", exc)
+    else:
+        log.info("reusing saved price history bars=%d", len(history.prices))
+
     orders = OrderManager(
         client,
         settings.trade_pair,

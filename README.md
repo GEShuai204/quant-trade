@@ -5,7 +5,7 @@ Directional 1x long/short bot for the Roostoo mock exchange. Simple SMA crossove
 ## What it does
 
 1. Polls ticker / balance / short positions about every 5 minutes.
-2. Builds a local last-price series (Roostoo has no OHLCV endpoint).
+2. On startup, seeds SMA history from public Binance klines (Roostoo has no OHLCV), then appends Roostoo last prices each loop.
 3. If fast SMA > slow SMA, targets about +20% long via `POST /v3/place_order` MARKET BUY.
 4. If fast SMA < slow SMA, targets about -20% short via `POST /v6/short_open` (USD collateral).
 5. Flattens by selling spot and `POST /v6/short_close`.

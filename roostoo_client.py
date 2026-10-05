@@ -70,7 +70,8 @@ class RoostooClient:
         except ValueError as exc:
             raise RoostooError(f"Non-JSON response: {response.text[:500]}") from exc
         if require_success and isinstance(data, dict) and "Success" in data and not data.get("Success"):
-            raise RoostooError(data.get("ErrMsg") or "Roostoo request failed")
+            err = data.get("ErrMsg") or "Roostoo request failed"
+            raise RoostooError(f"{err} | response={data}")
         return data
 
     def _get(

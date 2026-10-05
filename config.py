@@ -6,8 +6,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _clean(value: str) -> str:
+    value = value.strip().strip("\ufeff")
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1].strip()
+    return value
+
+
 def _require(name: str) -> str:
-    value = os.getenv(name, "").strip()
+    value = _clean(os.getenv(name, ""))
     if not value:
         raise RuntimeError(f"Missing required environment variable: {name}")
     return value
@@ -47,8 +54,8 @@ def load_settings() -> Settings:
     return Settings(
         api_key=_require("ROOSTOO_API_KEY"),
         api_secret=_require("ROOSTOO_API_SECRET"),
-        base_url=os.getenv("ROOSTOO_BASE_URL", "https://mock-api.roostoo.com").rstrip("/"),
-        trade_pair=os.getenv("TRADE_PAIR", "BTC/USD").strip().upper(),
+        base_url=_clean(os.getenv("ROOSTOO_BASE_URL", "https://mock-api.roostoo.com")).rstrip("/"),
+        trade_pair=_clean(os.getenv("TRADE_PAIR", "BTC/USD")).upper(),
         loop_seconds=max(60, _int("LOOP_SECONDS", 300)),
         target_fraction=target,
         sma_fast=sma_fast,
