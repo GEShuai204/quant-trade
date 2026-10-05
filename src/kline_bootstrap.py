@@ -16,6 +16,7 @@ _BINANCE_HOSTS = (
 
 @dataclass
 class Candle:
+    open_time_ms: int
     high: float
     low: float
     close: float
@@ -60,6 +61,7 @@ def fetch_candles(
     limit: int,
     timeout: int = 15,
     drop_incomplete: bool = True,
+    quiet: bool = False,
 ) -> list[Candle]:
     """Fetch completed candles only (drops the last in-progress Binance bar)."""
     symbol = roostoo_pair_to_binance(pair)
@@ -80,20 +82,27 @@ def fetch_candles(
             res.raise_for_status()
             rows = res.json()
             candles = [
-                Candle(high=float(r[2]), low=float(r[3]), close=float(r[4])) for r in rows
+                Candle(
+                    open_time_ms=int(r[0]),
+                    high=float(r[2]),
+                    low=float(r[3]),
+                    close=float(r[4]),
+                )
+                for r in rows
             ]
             if drop_incomplete and len(candles) > 1:
                 candles = candles[:-1]
-            if len(candles) < 5:
+            if len(candles) < 1:
                 raise RuntimeError(f"too few klines from {host}: {len(candles)}")
-            log.info(
-                "bootstrapped %d %s candles for %s via %s (%s)",
-                len(candles),
-                interval,
-                pair,
-                host,
-                symbol,
-            )
+            if not quiet and len(candles) >= 5:
+                log.info(
+                    "bootstrapped %d %s candles for %s via %s (%s)",
+                    len(candles),
+                    interval,
+                    pair,
+                    host,
+                    symbol,
+                )
             return candles[-limit:]
         except Exception as exc:  # noqa: BLE001
             last_err = exc

@@ -4,8 +4,8 @@ Trade **only BTC/USD** (spot long + 1x short). ETH/SOL/BNB/XRP/DOGE/ADA/AVAX/LIN
 
 ## Strategy (V1)
 
-1. Bootstrap completed **15m** candles from Binance (Roostoo has no OHLCV), then append Roostoo last prices each loop (~15 min).
-2. BTC SMA5 / SMA15 spread + 2-bar confirmation.
+1. **Dual loop:** `STRATEGY_BAR_SECONDS=3600` — SMA / breadth / Signal Score only when a new **closed 1h** bar arrives (Binance seed). `LOOP_SECONDS=900` — every **15m** refresh equity, drawdown, ATR stop, and rebalance toward the cached signal target.
+2. BTC SMA5 / SMA15 on **1h** bars + 2-bar confirmation.
 3. Market breadth = share of watch assets with positive 1h return.
 4. ETH 1h confirmation + BTC momentum → **Signal Score** (−100…+100).
 5. Score → target position (−65%…+65%), then × volatility × drawdown multipliers.
@@ -26,7 +26,7 @@ python main.py --live
 EC2 systemd: see `deploy/roostoo-bot.service` (set paths to `/home/ssm-user/quant-trade`). After `git pull`:
 
 ```bash
-# set LOOP_SECONDS=900 in .env, then:
+# LOOP_SECONDS=900 and STRATEGY_BAR_SECONDS=3600 in .env, then:
 sudo systemctl restart roostoo-bot
 sudo journalctl -u roostoo-bot -n 80
 ```

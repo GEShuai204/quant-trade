@@ -40,6 +40,7 @@ class Settings:
     trade_pair: str
     watch_pairs: tuple[str, ...]
     loop_seconds: int
+    strategy_bar_seconds: int
     sma_fast: int
     sma_slow: int
     http_timeout: int
@@ -66,6 +67,7 @@ def load_settings() -> Settings:
         trade_pair=_clean(os.getenv("TRADE_PAIR", "BTC/USD")).upper(),
         watch_pairs=watch,
         loop_seconds=max(300, _int("LOOP_SECONDS", 900)),
+        strategy_bar_seconds=max(900, _int("STRATEGY_BAR_SECONDS", 3600)),
         sma_fast=sma_fast,
         sma_slow=sma_slow,
         http_timeout=max(5, _int("HTTP_TIMEOUT", 15)),

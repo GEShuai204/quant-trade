@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from src.kline_bootstrap import Candle
+from src.kline_bootstrap import Candle, fetch_candles
 
 
 class PriceHistory:
@@ -14,6 +14,7 @@ class PriceHistory:
         self.closes: list[float] = []
         self.highs: list[float] = []
         self.lows: list[float] = []
+        self.last_bar_open_ms: int = 0
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._load()
 
@@ -27,10 +28,10 @@ class PriceHistory:
         try:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
             if isinstance(raw, list):
-                # backward compat: plain close list
                 self.closes = [float(x) for x in raw][-self.maxlen :]
                 self.highs = list(self.closes)
                 self.lows = list(self.closes)
+                self.last_bar_open_ms = 0
             else:
                 self.closes = [float(x) for x in raw.get("closes", [])][-self.maxlen :]
                 self.highs = [float(x) for x in raw.get("highs", self.closes)][-self.maxlen :]
@@ -38,18 +39,41 @@ class PriceHistory:
                 n = len(self.closes)
                 self.highs = (self.highs + self.closes)[:n][-self.maxlen :]
                 self.lows = (self.lows + self.closes)[:n][-self.maxlen :]
+                self.last_bar_open_ms = int(raw.get("last_bar_open_ms", 0))
         except (OSError, ValueError, TypeError):
             self.closes, self.highs, self.lows = [], [], []
+            self.last_bar_open_ms = 0
 
     def _save(self) -> None:
-        payload = {"closes": self.closes, "highs": self.highs, "lows": self.lows}
+        payload = {
+            "closes": self.closes,
+            "highs": self.highs,
+            "lows": self.lows,
+            "last_bar_open_ms": self.last_bar_open_ms,
+        }
         self.path.write_text(json.dumps(payload), encoding="utf-8")
 
     def seed_candles(self, candles: list[Candle]) -> None:
-        self.closes = [c.close for c in candles if c.close > 0][-self.maxlen :]
-        self.highs = [c.high for c in candles if c.close > 0][-self.maxlen :]
-        self.lows = [c.low for c in candles if c.close > 0][-self.maxlen :]
+        valid = [c for c in candles if c.close > 0]
+        self.closes = [c.close for c in valid][-self.maxlen :]
+        self.highs = [c.high for c in valid][-self.maxlen :]
+        self.lows = [c.low for c in valid][-self.maxlen :]
+        if valid:
+            self.last_bar_open_ms = valid[-1].open_time_ms
         self._save()
+
+    def append_candle(self, candle: Candle) -> bool:
+        if candle.open_time_ms <= self.last_bar_open_ms:
+            return False
+        self.closes.append(candle.close)
+        self.highs.append(candle.high)
+        self.lows.append(candle.low)
+        self.closes = self.closes[-self.maxlen :]
+        self.highs = self.highs[-self.maxlen :]
+        self.lows = self.lows[-self.maxlen :]
+        self.last_bar_open_ms = candle.open_time_ms
+        self._save()
+        return True
 
     def seed(self, prices: list[float]) -> None:
         vals = [float(x) for x in prices if float(x) > 0][-self.maxlen :]
@@ -58,15 +82,19 @@ class PriceHistory:
         self.lows = list(vals)
         self._save()
 
-    def append(self, price: float, high: float | None = None, low: float | None = None) -> None:
-        p = float(price)
-        self.closes.append(p)
-        self.highs.append(float(high) if high is not None else p)
-        self.lows.append(float(low) if low is not None else p)
-        self.closes = self.closes[-self.maxlen :]
-        self.highs = self.highs[-self.maxlen :]
-        self.lows = self.lows[-self.maxlen :]
-        self._save()
+
+def sync_closed_bar(
+    history: PriceHistory,
+    pair: str,
+    bar_seconds: int,
+    timeout: int,
+) -> bool:
+    """Append latest completed bar if Binance has a newer closed candle."""
+    candles = fetch_candles(pair, bar_seconds, limit=2, timeout=timeout, quiet=True)
+    if not candles:
+        return False
+    latest = candles[-1]
+    return history.append_candle(latest)
 
 
 def extract_ticker_row(ticker_response: dict[str, Any], pair: str) -> dict[str, Any]:
