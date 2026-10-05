@@ -185,9 +185,16 @@ class MarketConfirmStrategy:
         atr_v = atr(btc_highs, btc_lows, btc_closes, self.atr_period)
         price = btc_closes[-1] if btc_closes else 0.0
         pos = score_to_position(score)
-        # Unconfirmed SMA noise must not open fresh directional risk.
+        # Unconfirmed: still participate lightly so we are not flat all day.
+        # Confirmed: full map, never fade the 2-bar BTC trend.
         if self.require_confirmed and confirmed == "NEUTRAL":
-            pos = 0.0
+            regime = _regime(breadth, breadth_valid and bool(returns))
+            if regime in {"STRONG_BULL", "BULL"}:
+                pos = 0.10
+            elif regime in {"STRONG_BEAR", "BEAR"}:
+                pos = -0.10
+            else:
+                pos = max(-0.10, min(0.10, pos))
         elif self.require_confirmed and confirmed == "BULLISH" and pos < 0:
             pos = 0.0
         elif self.require_confirmed and confirmed == "BEARISH" and pos > 0:

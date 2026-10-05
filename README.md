@@ -10,7 +10,7 @@ Trade **only BTC/USD** (spot long + 1x short). ETH/SOL/BNB/XRP/DOGE/ADA/AVAX/LIN
 4. ETH 1h confirmation + BTC momentum → **Signal Score** (−100…+100).
 5. Score → target position (max about ±50%), then × volatility × drawdown.
 6. ATR stop/trailing. Rebalance only if |Δ| ≥ 8%.
-7. Anti-whipsaw: open only when BTC trend is **confirmed** (2 bars); after a flip, wait 2h before reverse entry; add risk in steps of ≤15%.
+7. Anti-whipsaw: large size only when BTC trend is **confirmed** (2 bars). If unconfirmed, still hold a light ±10% aligned with market breadth so the bot is not idle all day. After a flip, wait 2h before reverse entry; add risk in steps of ≤15%.
 
 ## Setup
 
