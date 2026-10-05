@@ -48,6 +48,16 @@ class Settings:
     min_position_adjust: float
     min_breadth_assets: int
     atr_period: int
+    require_confirmed: bool
+    flip_cooldown_seconds: int
+    max_step_fraction: float
+
+
+def _bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return default
+    return _clean(raw).lower() in {"1", "true", "yes", "on"}
 
 
 def load_settings() -> Settings:
@@ -57,7 +67,7 @@ def load_settings() -> Settings:
         raise RuntimeError("SMA_SLOW must be greater than SMA_FAST, and SMA_FAST >= 2")
     watch_raw = _clean(os.getenv("WATCH_PAIRS", DEFAULT_WATCH))
     watch = tuple(p.strip().upper() for p in watch_raw.split(",") if p.strip())
-    max_abs = _float("MAX_ABS_POSITION", 0.65)
+    max_abs = _float("MAX_ABS_POSITION", 0.50)
     if not 0 < max_abs <= 1:
         raise RuntimeError("MAX_ABS_POSITION must be in (0, 1]")
     return Settings(
@@ -72,7 +82,10 @@ def load_settings() -> Settings:
         sma_slow=sma_slow,
         http_timeout=max(5, _int("HTTP_TIMEOUT", 15)),
         max_abs_position=max_abs,
-        min_position_adjust=_float("MIN_POSITION_ADJUST", 0.05),
+        min_position_adjust=_float("MIN_POSITION_ADJUST", 0.08),
         min_breadth_assets=max(3, _int("MIN_BREADTH_ASSETS", 4)),
         atr_period=max(5, _int("ATR_PERIOD", 14)),
+        require_confirmed=_bool("REQUIRE_CONFIRMED", True),
+        flip_cooldown_seconds=max(0, _int("FLIP_COOLDOWN_SECONDS", 7200)),
+        max_step_fraction=max(0.05, min(0.5, _float("MAX_STEP_FRACTION", 0.15))),
     )

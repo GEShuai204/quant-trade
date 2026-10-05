@@ -110,36 +110,44 @@ def _btc_score(confirmed: str, raw: str) -> float:
 
 
 def score_to_position(score: float) -> float:
+    # Slightly less aggressive than first V1 to cut fee churn.
     if score >= 85:
-        return 0.65
-    if score >= 70:
         return 0.50
-    if score >= 55:
+    if score >= 70:
         return 0.35
+    if score >= 55:
+        return 0.25
     if score >= 40:
-        return 0.20
-    if score >= 20:
+        return 0.15
+    if score >= 25:
         return 0.10
-    if score > -20:
+    if score > -25:
         return 0.0
     if score > -40:
         return -0.10
     if score > -55:
-        return -0.20
+        return -0.15
     if score > -70:
-        return -0.35
+        return -0.25
     if score > -85:
-        return -0.50
-    return -0.65
+        return -0.35
+    return -0.50
 
 
 class MarketConfirmStrategy:
     """BTC-only trading with multi-asset market confirmation (V1)."""
 
-    def __init__(self, sma_fast: int = 5, sma_slow: int = 15, atr_period: int = 14) -> None:
+    def __init__(
+        self,
+        sma_fast: int = 5,
+        sma_slow: int = 15,
+        atr_period: int = 14,
+        require_confirmed: bool = True,
+    ) -> None:
         self.sma_fast = sma_fast
         self.sma_slow = sma_slow
         self.atr_period = atr_period
+        self.require_confirmed = require_confirmed
         self._raw_trend_hist: list[str] = []
 
     def evaluate(
@@ -176,6 +184,14 @@ class MarketConfirmStrategy:
         score = btc_sc * 0.40 + br_sc * 0.30 + eth_sc * 0.15 + mom * 0.15
         atr_v = atr(btc_highs, btc_lows, btc_closes, self.atr_period)
         price = btc_closes[-1] if btc_closes else 0.0
+        pos = score_to_position(score)
+        # Unconfirmed SMA noise must not open fresh directional risk.
+        if self.require_confirmed and confirmed == "NEUTRAL":
+            pos = 0.0
+        elif self.require_confirmed and confirmed == "BULLISH" and pos < 0:
+            pos = 0.0
+        elif self.require_confirmed and confirmed == "BEARISH" and pos > 0:
+            pos = 0.0
 
         return StrategySnapshot(
             btc_price=price,
@@ -195,6 +211,6 @@ class MarketConfirmStrategy:
             eth_score=eth_sc,
             momentum_score=mom,
             signal_score=score,
-            signal_position=score_to_position(score),
+            signal_position=pos,
             atr_value=atr_v,
         )

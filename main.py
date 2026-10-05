@@ -26,6 +26,7 @@ from src.risk_manager import (
 )
 from src.strategy import MarketConfirmStrategy, score_to_position
 from src.strategy_state import CachedStrategy, StrategyStateStore
+from src.trade_guard import TradeGuard
 
 
 def build_client():
@@ -199,7 +200,12 @@ def run_live() -> int:
     for p, hist in watch_hist.items():
         _bootstrap_history(hist, p, settings.strategy_bar_seconds, need, settings.http_timeout, log)
 
-    strategy = MarketConfirmStrategy(settings.sma_fast, settings.sma_slow, settings.atr_period)
+    strategy = MarketConfirmStrategy(
+        settings.sma_fast,
+        settings.sma_slow,
+        settings.atr_period,
+        require_confirmed=settings.require_confirmed,
+    )
     store = StrategyStateStore(data_dir / "strategy_cache.json")
     cached = store.load()
     if not cached.updated or cached.last_bar_open_ms != btc_hist.last_bar_open_ms:
@@ -207,6 +213,11 @@ def run_live() -> int:
 
     dd_ctl = DrawdownController(data_dir / "equity_peak.json")
     stops = AtrStopManager(data_dir / "atr_stop.json")
+    guard = TradeGuard(
+        data_dir / "trade_guard.json",
+        flip_cooldown_seconds=settings.flip_cooldown_seconds,
+        max_step_fraction=settings.max_step_fraction,
+    )
     orders = OrderManager(
         client,
         settings.trade_pair,
@@ -260,6 +271,10 @@ def run_live() -> int:
             ):
                 target = current if (target * current) > 0 else 0.0
 
+            target, guard_reason = guard.filter_target(current, target)
+            if guard_reason != "ok":
+                log.info("GUARD %s → target=%.3f (from signal)", guard_reason, target)
+
             log.info(
                 "RISK/EXEC px=%.2f equity=%.2f dd=%.2f%%×%.2f vol=%s×%.2f | "
                 "signal_pos=%.2f (score=%.1f conf=%s) | current=%.3f target=%.3f atr=%s",
@@ -284,6 +299,16 @@ def run_live() -> int:
                 btc_row,
                 int(all_tickers.get("ServerTime") or 0),
             )
+            if action not in {"on_target", "cooldown", "stale", "no_equity", "no_price", "flat"}:
+                # Refresh position after a fill for guard bookkeeping.
+                try:
+                    bal2 = client.get_balance()
+                    sh2 = client.get_short_positions()
+                    eq2 = equity_usd(bal2, sh2, btc_row, settings.trade_pair)
+                    cur2 = current_net_fraction(bal2, sh2, btc_row, settings.trade_pair, eq2)
+                    guard.note_fill(cur2)
+                except Exception:
+                    guard.note_fill(target)
             log.info(
                 "decision=%s target=%.3f (score_map=%.2f)",
                 action,
