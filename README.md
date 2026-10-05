@@ -1,59 +1,34 @@
-# Roostoo APAC Quant Bot
+# Roostoo BTC Market-Confirm Bot (V1)
 
-Directional 1x long/short bot for the Roostoo mock exchange. Simple SMA crossover, live orders, no dry-run.
+Trade **only BTC/USD** (spot long + 1x short). ETH/SOL/BNB/XRP/DOGE/ADA/AVAX/LINK are **market sensors** for breadth / confirmation — never ordered.
 
-## What it does
+## Strategy (V1)
 
-1. Polls ticker / balance / short positions about every 5 minutes.
-2. On startup, seeds SMA history from public Binance klines (Roostoo has no OHLCV), then appends Roostoo last prices each loop.
-3. If fast SMA > slow SMA, targets about +20% long via `POST /v3/place_order` MARKET BUY.
-4. If fast SMA < slow SMA, targets about -20% short via `POST /v6/short_open` (USD collateral).
-5. Flattens by selling spot and `POST /v6/short_close`.
-6. Logs every request to `logs/bot.log`. Secrets are never logged.
-
-`--test` never places orders.
+1. Bootstrap completed **1h** candles from Binance (Roostoo has no OHLCV), then append Roostoo last prices each hour.
+2. BTC SMA5 / SMA15 spread + 2-bar confirmation.
+3. Market breadth = share of watch assets with positive 1h return.
+4. ETH 1h confirmation + BTC momentum → **Signal Score** (−100…+100).
+5. Score → target position (−65%…+65%), then × volatility × drawdown multipliers.
+6. ATR(14) hard stop (2×) and trailing (2.5×). Rebalance only if |Δposition| ≥ 5%.
 
 ## Setup
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-```
-
-Edit `.env` with the **competition** API key pair (not the pre-competition test keys).
-
-```bash
+# put competition API key/secret in .env
 python main.py --test
 python main.py --live
 ```
 
-## EC2
-
-Follow the official AWS guide, then:
+EC2 systemd: see `deploy/roostoo-bot.service` (set paths to `/home/ssm-user/quant-trade`). After `git pull`:
 
 ```bash
-git clone <your-repo> /home/ubuntu/hackathon
-cd /home/ubuntu/hackathon
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-nano .env
-```
-
-Adjust paths in `deploy/roostoo-bot.service`, then:
-
-```bash
-sudo cp deploy/roostoo-bot.service /etc/systemd/system/roostoo-bot.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now roostoo-bot
-sudo journalctl -u roostoo-bot -f
+# update LOOP to 3600 in .env if still 300
+sudo systemctl restart roostoo-bot
+sudo journalctl -u roostoo-bot -n 80
 ```
 
 Do not commit `.env`.
-
-## Auth
-
-Signed routes send `RST-API-KEY` and `MSG-SIGNATURE`. Signature is HMAC-SHA256 of alphabetically sorted `key=value` params (the exact query string or POST body). Timestamps are 13-digit milliseconds, offset-corrected with `/v3/serverTime`.
