@@ -1,0 +1,16 @@
+[Unit]
+Description=Roostoo directional quant bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ubuntu/hackathon
+ExecStart=/home/ubuntu/hackathon/.venv/bin/python main.py --live
+Restart=always
+RestartSec=15
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/home/ubuntu/hackathon/.env
+
+[Install]
+WantedBy=multi-user.target
