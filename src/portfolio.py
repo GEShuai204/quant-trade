@@ -3,8 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 
-def wallet_qty(wallet: dict[str, Any], coin: str) -> tuple[float, float]:
-    row = (wallet.get("Wallet") or {}).get(coin) or {}
+def _spot_wallet(balance: dict[str, Any]) -> dict[str, Any]:
+    # Competition API returns SpotWallet; older docs used Wallet.
+    return balance.get("SpotWallet") or balance.get("Wallet") or {}
+
+
+def wallet_qty(balance: dict[str, Any], coin: str) -> tuple[float, float]:
+    row = _spot_wallet(balance).get(coin) or {}
     return float(row.get("Free") or 0), float(row.get("Lock") or 0)
 
 
